@@ -3,6 +3,11 @@
 #include <math.h>
 #include <string.h>
 #include <float.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <sys/wait.h>
 
 #define TRUE (0==0)
 #define FALSE (0==1)
@@ -84,7 +89,7 @@ struct s_sphere
     point minBB;
     color c;
     float cr;
-    float kd; //[0,1] 
+    float kd; //[0,1]
     float kf; //[0,1]
     float r;
 
@@ -102,7 +107,7 @@ struct o_open_cylinder
     point minBB;
     color c;
     float cr;
-    float kd; //[0,1] 
+    float kd; //[0,1]
     float kf; //[0,1]
 
     int e;
@@ -117,7 +122,7 @@ struct r_rectangle
 
     color c;
     float cr;
-    float kd; //[0,1] 
+    float kd; //[0,1]
     float kf; //[0,1]
 
     int e;
@@ -131,7 +136,7 @@ struct p_plane
     float d;
 
     float cr;
-    float kd; //[0,1] 
+    float kd; //[0,1]
     float kf; //[0,1]
     int e;
     float ks;
@@ -171,7 +176,7 @@ typedef unsigned char uchar;
 //-----------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------
 
-// FUNCTIONS 
+// FUNCTIONS
 ray get_primary_ray(camera *cam, int x, int y, int sample);
 point get_sample_pos(int x, int y, int sample);
 point jitter(int x, int y, int s);
@@ -248,14 +253,20 @@ int irand[NRAN];
 
 int main(int argc, char ** argv)
 {
-    int i,j;
+
+    int i,j,a;
+    key_t k;
+    int shmid;
+    int N = 2;    //?????
+    pid_t pid;
     uchar *image;
     camera c;
     point eye;
     point lookat;
-    int samples; 
-    int s;    
+    int samples;
+    int s;
     float rcp_samples;// = 1.0 / (float)samples;
+    //int blocksize = c.view.width/N;
     //char fname[20];
     //ray * rays;
     //color cor;
@@ -278,7 +289,12 @@ int main(int argc, char ** argv)
     setupCamera(&c);
 
     //---malloc the image frame---
-    image = (uchar *) malloc(c.view.width * c.view.height * 3 * sizeof(uchar));
+    //image = (uchar *) malloc(c.view.width * c.view.height * 3 * sizeof(uchar));
+    int blocksize = c.view.width/N;
+    k = ftok("/home/larissapires/SOR/Processos/simpleRT.c",'R');
+    shmid = shmget(k, c.view.width * c.view.height * 3 * sizeof(uchar), 0644|IPC_CREAT);
+    image = shmat(shmid, (void*)0, 0); //pai associa-se a regiao compartilhada
+
     if(image == NULL)
     {
         fprintf(stderr,"Error. Cannot malloc image frame.\n");
@@ -305,37 +321,59 @@ int main(int argc, char ** argv)
     //---ray tracing loop---
 
     samples = 8;
-    s = 0;    
+    s = 0;
     rcp_samples = 1.0 / (float)samples;
 
-    for(i = 0 ; i < c.view.width ; i++)
+    for(a = 0; a < N; a++)//
     {
-        for(j = 0 ; j < c.view.height ; j++)
+      pid = fork();
+
+      if(pid < 0)
+      {
+        fprintf(stderr,"erro, nao eh possivel criar processo filho\n");
+        return 1;
+      }
+      else if(pid == 0) //filho
+      {
+        for(i = a * blocksize; i < (a+1) * blocksize; i++) //para cada coluna do varimento - mesmo numero de colunas em um bloco
         {
-            float r, g, b;
-            r = g = b = 0.0;
+            for(j = 0 ; j < c.view.height ; j++)  //para cada pixel da coluna de varimento
+            {
+              //Determinar o raio que une o centro de projecção com o pixel
+                float r, g, b;
+                r = g = b = 0.0;
 
-            for(s=0; s<samples; s++) {
-                ray rr = get_primary_ray(&c,i,j,s);    
-                color col = trace(c,&rr,0);
-                r += col.r;
-                g += col.g;
-                b += col.b;
+                for(s=0; s<samples; s++) { //Para cada objecto da cena
+                  //Se  o  raio  intersecta  o  objecto  e  o  ponto  de  intersecção  encontra-se mais  próximo  do  centro  de  projecção  do  que  o  ponto  de intersecção até agora encontrado
+                    ray rr = get_primary_ray(&c,i,j,s);
+                    color col = trace(c,&rr,0);
+                    r += col.r;
+                    g += col.g;
+                    b += col.b;
+                  }
+              //Registar o ponto de intersecção e o objecto intersectado
+                r = r * rcp_samples;
+                g = g * rcp_samples;
+                b = b * rcp_samples;
+
+              //ray rr = get_primary_ray(&c, i, j, samples);
+              //color clr = trace(c,&rr,0);
+
+              //red green blue color components
+              //Atribuir  ao  pixel  a  cor  do  objecto  intersectado  no  ponto  de  intersecção registado
+                image[ 3* (i * c.view.height + j) + 0] = floatToIntColor(r);
+                image[ 3* (i * c.view.height + j) + 1] = floatToIntColor(g);
+                image[ 3* (i * c.view.height + j) + 2] = floatToIntColor(b);
+              }
             }
+            exit(0);    //encerra tal filho
+          }
+      else //pai
+      {
 
-            r = r * rcp_samples;
-            g = g * rcp_samples;
-            b = b * rcp_samples;
-
-            //ray rr = get_primary_ray(&c, i, j, samples); 
-            //color clr = trace(c,&rr,0);
-
-            //red green blue color components
-            image[ 3* (i * c.view.height + j) + 0] = floatToIntColor(r);
-            image[ 3* (i * c.view.height + j) + 1] = floatToIntColor(g);
-            image[ 3* (i * c.view.height + j) + 2] = floatToIntColor(b);
-        }
+      }
     }
+    while(wait(NULL) > 0);    //encerra o pai
 
     //printPrimaryRays(rays,c.view.width*c.view.height); //for testing only
 
@@ -367,7 +405,7 @@ ray get_primary_ray(camera *cam, int x, int y, int sample) {
     k.y = cam->lookat.y - cam->eye.y;
     k.z = cam->lookat.z - cam->eye.z;
 
-    normalize(&k);	
+    normalize(&k);
     //NORMALIZE(k);
 
     crossProduct(&j,&k,&i);
@@ -564,7 +602,7 @@ void setupCamera(camera *c)
     normalize(&c->u);
 
     crossProduct(&c->u,&c->w,&c->v);
-    normalize(&c->v);	
+    normalize(&c->v);
 
     //printf("u: %f %f %f\n",c->u.x,c->u.y,c->u.z);
     //printf("v: %f %f %f\n",c->v.x,c->v.y,c->v.z);
@@ -606,7 +644,7 @@ void initCamera(camera *c, point eye, point lookat, int width, int height)
     c->view.width = width;
     c->view.height = height;
 
-    //c->distance = dist(&c->eye,&c->lookat); 
+    //c->distance = dist(&c->eye,&c->lookat);
     c->distance = 1.0f/HALF_FOV;
 }
 
@@ -949,7 +987,7 @@ enum object intersect3Dscene(int *idx, ray *r, float *t)
 
 //-----------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------
-//----------------------------------------------------------------------------------------- 
+//-----------------------------------------------------------------------------------------
 
 color trace(camera cam,ray *r, int iter)
 {
@@ -989,7 +1027,7 @@ color trace(camera cam,ray *r, int iter)
             //call the shade function and, after that, returns the result of the function
             return shade(cam,&dir,obj,index,&intersection,iter);
 
-            //return white; //just for testing and learning what the shade function actually does. 
+            //return white; //just for testing and learning what the shade function actually does.
         }
         else
         {
@@ -1028,7 +1066,7 @@ color shade(camera cam,point *incid ,enum object obj, int index, point *p, int i
     point reflexao;
     point normal_aux;// = normal;
     point normal_aux2;// = normal;
-    point light_reflection;	
+    point light_reflection;
 
     if(obj == SPHERE)
     {
@@ -1176,7 +1214,7 @@ color shade(camera cam,point *incid ,enum object obj, int index, point *p, int i
                     {
                         r = r + data[index].ks * pow(dot2,data[index].e) * (lights[il].c.r * lights[il].ls) *dot;
                         g = g + data[index].ks * pow(dot2,data[index].e) * (lights[il].c.r * lights[il].ls) *dot;
-                        b = b + data[index].ks * pow(dot2,data[index].e) * (lights[il].c.r * lights[il].ls) *dot;					
+                        b = b + data[index].ks * pow(dot2,data[index].e) * (lights[il].c.r * lights[il].ls) *dot;
                     }
                     else if(obj == PLANE)
                     {
@@ -1340,14 +1378,14 @@ int intersectOpenCylinder(open_cylinder *cylinder, ray *r, float *t_res)
     dy = dy/temp;
     dz = dz/temp;
 
-    a = dx * dx + dz * dz;  	
-    b = 2.0f * (ox * dx + oz * dz);					
+    a = dx * dx + dz * dz;
+    b = 2.0f * (ox * dx + oz * dz);
     c = ox * ox + oz * oz - cylinder->r * cylinder->r;
     disc = b * b - 4.0f * a * c ;
 
     if (disc < 0.0f)
         return FALSE;
-    else {	
+    else {
         e = sqrt(disc);
         denom = 2.0f * a;
         t = (-b - e) / denom;    // smaller root
@@ -1364,10 +1402,10 @@ int intersectOpenCylinder(open_cylinder *cylinder, ray *r, float *t_res)
                 //	sr.normal = -sr.normal;
                 return TRUE;
             }
-        } 
+        }
 
         t = (-b + e) / denom;    // larger root
-        *t_res = t;	
+        *t_res = t;
 
         if (t > 0) {
             yhit = oy + t * dy;
@@ -1381,7 +1419,7 @@ int intersectOpenCylinder(open_cylinder *cylinder, ray *r, float *t_res)
 
                 return TRUE;
             }
-        } 
+        }
     }
     return FALSE;
 }
@@ -1461,7 +1499,7 @@ void generateScene()
     data[0].c.b = 0.05f;
     data[0].e = 50.0f;
     data[0].cr = 0.3f;
-    data[0].kf = 0.8f; 
+    data[0].kf = 0.8f;
 
 
     data[1].center.x = 2.5f;
@@ -1473,7 +1511,7 @@ void generateScene()
     data[1].c.b = 1.0f;
     data[1].e = 50.0f;
     data[1].cr = 0.4f;
-    data[1].kf = 0.4f; 
+    data[1].kf = 0.4f;
 
     data[2].center.x = 0;
     data[2].center.y = 1;
@@ -1484,7 +1522,7 @@ void generateScene()
     data[2].c.b = 0.1f;
     data[2].e = 60.0f;
     data[2].cr = 0.7f;
-    data[2].kf = 0.7f; 
+    data[2].kf = 0.7f;
 
     for(i = 0 ; i < N_SPHERES ; i++)
     {
@@ -1496,7 +1534,7 @@ void generateScene()
         data[i].minBB.y = data[i].center.y - data[i].r;
         data[i].minBB.z = data[i].center.z - data[i].r;
 
-        data[i].kd = 0.5f;	
+        data[i].kd = 0.5f;
         data[i].ks = 0.25f;
     }
 
@@ -1510,7 +1548,7 @@ void generateScene()
     cylinder.c.b = 1.0f;
     cylinder.e = 60.0f;
     cylinder.cr = 0.7f;
-    cylinder.kf = 0.5f; 
+    cylinder.kf = 0.5f;
 
     //rectangle
     //data[1].center.x = 2.5f;
@@ -1534,7 +1572,7 @@ void generateScene()
     rect.c.b = 0.8f;
     rect.e = 20.0f;
     rect.cr = 0.7f;
-    rect.kf = 0.3f; 
+    rect.kf = 0.3f;
 
     //also generate a flat ground
     ground.normal.x = 0.0f;
@@ -1558,7 +1596,7 @@ void generateScene()
     ground.m_uAxis.z = -ground.normal.x;
 
     //v axis coordinates for texture
-    crossProduct(&ground.m_uAxis,&ground.normal,&ground.m_vAxis); 
+    crossProduct(&ground.m_uAxis,&ground.normal,&ground.m_vAxis);
 }
 
 
@@ -1567,7 +1605,7 @@ void generateRandomSpheres()
 {
     int i;
 
-    // uncoment for fixed sphere locations **** 
+    // uncoment for fixed sphere locations ****
 
     //float x = (rand() % AREA) - (rand() % AREA);
     //float y = SPHERE_RAY + 5; // (rand() % AREA) - (rand() % AREA);
@@ -1591,7 +1629,7 @@ void generateRandomSpheres()
            else
            {
            data[i].center.x = data[i-1].center.x + 3*SPHERE_RAY;
-           data[i].center.y = data[i-1].center.y; 
+           data[i].center.y = data[i-1].center.y;
            data[i].center.z = data[i-1].center.z;
            }
            */
@@ -1609,23 +1647,23 @@ void generateRandomSpheres()
         data[i].minBB.z = data[i].center.z - data[i].r;
 
 
-        //RAND_MAX is a constant defined in <cstdlib>. 
+        //RAND_MAX is a constant defined in <cstdlib>.
         //Its default value may vary between implementations
         //but it is granted to be at least 32767.
 
         //random colors
         data[i].c.r = (float) rand()/RAND_MAX;
-        data[i].c.g = (float) rand()/RAND_MAX;        
+        data[i].c.g = (float) rand()/RAND_MAX;
         data[i].c.b = (float) rand()/RAND_MAX;
 
         //fixed colors (from 0 to 1)
         //data[i].c.r = 0.7f;
-        //data[i].c.g = 0.7f;        
+        //data[i].c.g = 0.7f;
         //data[i].c.b = 0.7f;
 
         //printf("data[%d].kf = %f\n",h,data[h].kf);
         data[i].kf = 1.0f;
-        data[i].kd = 0.5f;	
+        data[i].kd = 0.5f;
         data[i].cr = 1.0f;
         data[i].e = 100;
         data[i].ks = 0.25f;
@@ -1654,7 +1692,7 @@ void generateRandomSpheres()
     ground.m_uAxis.z = -ground.normal.x;
 
     //v axis coordinates for texture
-    crossProduct(&ground.m_uAxis,&ground.normal,&ground.m_vAxis); 
+    crossProduct(&ground.m_uAxis,&ground.normal,&ground.m_vAxis);
 }
 
 //-----------------------------------------------------------------------------------------
@@ -1717,7 +1755,7 @@ void generateRandomLightSources()
 
 int intersectRectangle(rectangle *rec, ray *r, float *t_res)
 {
-    float dx,dy,dz,temp,t1,t2,t,ddota,ddotb,a_len_squared,b_len_squared; 
+    float dx,dy,dz,temp,t1,t2,t,ddota,ddotb,a_len_squared,b_len_squared;
     point normal,aux1,aux2,p,d;
     crossProduct(&rec->a,&rec->b, &normal);
 
@@ -1835,4 +1873,3 @@ float checkerTexture(float u, float v)
 //-----------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------
-
