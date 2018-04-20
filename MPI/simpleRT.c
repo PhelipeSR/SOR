@@ -261,7 +261,7 @@ int main(int argc, char *argv[])
 	int s;
 	float rcp_samples;// = 1.0 / (float)samples;
 
-	int num_processos, rank, len, mpi_status;
+	int num_trabalhadores, rank, len, mpi_status;
 	char hostname[MPI_MAX_PROCESSOR_NAME];
 	//char fname[20];
 	//ray * rays;
@@ -315,18 +315,29 @@ int main(int argc, char *argv[])
 	s = 0;
 	rcp_samples = 1.0 / (float)samples;
 
+
+
 	mpi_status = MPI_Init (&argc, &argv);
 	if (mpi_status != MPI_SUCCESS) {
-		printf( "Erro ao iniciar MPI\n");
+		printf( "Erro ao iniciar MPI %d de %d\n", rank, num_trabalhadores );
 		MPI_Abort(MPI_COMM_WORLD,mpi_status);
 	}
-	MPI_Comm_size (MPI_COMM_WORLD, &num_processos);
+
+	MPI_Comm_size (MPI_COMM_WORLD, &num_trabalhadores);
 	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
 	MPI_Get_processor_name(hostname,&len);
 
+	if (WID % num_trabalhadores != 0) {
+		printf("O numero de trabalhdores %d nao e divisivel por %d\n", num_trabalhadores,WID);
+		MPI_Abort(MPI_COMM_WORLD,mpi_status);
+	}
+
+	// Trabalhador pai
 	if (rank == 0) {
 		printf("eu sou o pai\n");
-	}else{
+	}
+	// Trabalhadores filhos
+	else{
 		for(i = 0 ; i < c.view.width ; i++)
 		{
 			for(j = 0 ; j < c.view.height ; j++)
