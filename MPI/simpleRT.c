@@ -250,10 +250,10 @@ point urand[NRAN];
 int irand[NRAN];
 
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
 	int i,j;
-	uchar *image;
+	uchar *imagem;
+	uchar *imagem_filho;
 	camera c;
 	point eye;
 	point lookat;
@@ -261,8 +261,25 @@ int main(int argc, char *argv[])
 	int s;
 	float rcp_samples;// = 1.0 / (float)samples;
 
-	int num_trabalhadores, rank, len, mpi_status;
+	int num_trabalhadores, rank, len, mpi_status,mensagem;
 	char hostname[MPI_MAX_PROCESSOR_NAME];
+
+	mpi_status = MPI_Init (&argc, &argv);
+	if (mpi_status != MPI_SUCCESS) {
+		printf( "Erro ao iniciar MPI %d de %d\n", rank, num_trabalhadores );
+		MPI_Abort(MPI_COMM_WORLD,mpi_status);
+	}
+
+	MPI_Comm_size(MPI_COMM_WORLD, &num_trabalhadores);
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	MPI_Get_processor_name(hostname, &len);
+
+
+	if (WID % (num_trabalhadores-1) != 0) {
+		printf("O numero de trabalhdores %d nao e divisivel por %d\n", num_trabalhadores,WID);
+		MPI_Finalize();
+		return 0;
+	}
 	//char fname[20];
 	//ray * rays;
 	//color cor;
@@ -284,18 +301,6 @@ int main(int argc, char *argv[])
 	initCamera(&c,eye,lookat,WID,HEI);
 	setupCamera(&c);
 
-	//---malloc the image frame---
-	image = (uchar *) malloc(c.view.width * c.view.height * 3 * sizeof(uchar));
-	if(image == NULL)
-	{
-		fprintf(stderr,"Error. Cannot malloc image frame.\n");
-		return 0;
-	}
-
-	//---just init the image frame with some data---
-	initImage(&c,image);
-
-	//---insert random N_SPHERES into the 'data' array
 	//generateRandomSpheres();
 	generateScene();
 
@@ -315,30 +320,43 @@ int main(int argc, char *argv[])
 	s = 0;
 	rcp_samples = 1.0 / (float)samples;
 
-
-
-	mpi_status = MPI_Init (&argc, &argv);
-	if (mpi_status != MPI_SUCCESS) {
-		printf( "Erro ao iniciar MPI %d de %d\n", rank, num_trabalhadores );
-		MPI_Abort(MPI_COMM_WORLD,mpi_status);
-	}
-
-	MPI_Comm_size (MPI_COMM_WORLD, &num_trabalhadores);
-	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
-	MPI_Get_processor_name(hostname,&len);
-
-	if (WID % num_trabalhadores != 0) {
-		printf("O numero de trabalhdores %d nao e divisivel por %d\n", num_trabalhadores,WID);
-		MPI_Abort(MPI_COMM_WORLD,mpi_status);
-	}
+	int colunas = WID/(num_trabalhadores - 1);
 
 	// Trabalhador pai
 	if (rank == 0) {
-		printf("eu sou o pai\n");
+
+		imagem = (uchar *) malloc(c.view.width * c.view.height * 3 * sizeof(uchar));
+		if(imagem == NULL){
+			fprintf(stderr,"Error. Cannot malloc image frame.\n");
+			MPI_Abort(MPI_COMM_WORLD,mpi_status);
+			return 0;
+		}
+		initImage(&c,imagem);
+
+		for (int i = 1; i < num_trabalhadores; i++){
+			MPI_Recv(&imagem[(3*c.view.height*colunas)*(i-1)], (colunas * c.view.height * 3), MPI_UNSIGNED_CHAR, i, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		}
+		if(save_bmp("output_rt.bmp",&c,imagem) != 0) {
+			fprintf(stderr,"Cannot write image 'output.bmp'.\n");
+			return 0;
+		}
+		free(imagem);
 	}
 	// Trabalhadores filhos
 	else{
-		for(i = 0 ; i < c.view.width ; i++)
+
+		imagem_filho = (uchar *) malloc(colunas * c.view.height * 3 * sizeof(uchar));
+		if(imagem_filho == NULL){
+			fprintf(stderr,"Error. Cannot malloc image frame.\n");
+			MPI_Abort(MPI_COMM_WORLD,mpi_status);
+			return 0;
+		}
+		// initImage(&c,imagem_filho);
+
+		int inf = (rank-1)*colunas;
+        int sup = rank*colunas;
+
+		for(i = inf ; i < sup ; i++)
 		{
 			for(j = 0 ; j < c.view.height ; j++)
 			{
@@ -361,28 +379,16 @@ int main(int argc, char *argv[])
 				//color clr = trace(c,&rr,0);
 
 				//red green blue color components
-				image[ 3* (i * c.view.height + j) + 0] = floatToIntColor(r);
-				image[ 3* (i * c.view.height + j) + 1] = floatToIntColor(g);
-				image[ 3* (i * c.view.height + j) + 2] = floatToIntColor(b);
+				imagem_filho[ 3* ((i - inf) * c.view.height + j) + 0] = floatToIntColor(r);
+				imagem_filho[ 3* ((i - inf) * c.view.height + j) + 1] = floatToIntColor(g);
+				imagem_filho[ 3* ((i - inf) * c.view.height + j) + 2] = floatToIntColor(b);
 			}
 		}
+		MPI_Send(imagem_filho, (colunas * c.view.height * 3), MPI_UNSIGNED_CHAR, 0, 1, MPI_COMM_WORLD);
+		free(imagem_filho);
 	}
+
 	MPI_Finalize();
-
-	//printPrimaryRays(rays,c.view.width*c.view.height); //for testing only
-
-	if(save_bmp("output_rt.bmp",&c,image) != 0)
-	{
-		fprintf(stderr,"Cannot write image 'output.bmp'.\n");
-		return 0;
-	}
-
-	//---freeing data---
-	//free(rays);
-	free(image);
-
-	//---exit---
-	return 0;
 }
 
 
