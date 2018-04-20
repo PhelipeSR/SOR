@@ -3,6 +3,11 @@
 #include <math.h>
 #include <string.h>
 #include <float.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <sys/wait.h>
 
 #define TRUE (0==0)
 #define FALSE (0==1)
@@ -84,7 +89,7 @@ struct s_sphere
     point minBB;
     color c;
     float cr;
-    float kd; //[0,1] 
+    float kd; //[0,1]
     float kf; //[0,1]
     float r;
 
@@ -102,7 +107,7 @@ struct o_open_cylinder
     point minBB;
     color c;
     float cr;
-    float kd; //[0,1] 
+    float kd; //[0,1]
     float kf; //[0,1]
 
     int e;
@@ -117,7 +122,7 @@ struct r_rectangle
 
     color c;
     float cr;
-    float kd; //[0,1] 
+    float kd; //[0,1]
     float kf; //[0,1]
 
     int e;
@@ -131,7 +136,7 @@ struct p_plane
     float d;
 
     float cr;
-    float kd; //[0,1] 
+    float kd; //[0,1]
     float kf; //[0,1]
     int e;
     float ks;
@@ -171,7 +176,7 @@ typedef unsigned char uchar;
 //-----------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------
 
-// FUNCTIONS 
+// FUNCTIONS
 ray get_primary_ray(camera *cam, int x, int y, int sample);
 point get_sample_pos(int x, int y, int sample);
 point jitter(int x, int y, int s);
@@ -248,14 +253,20 @@ int irand[NRAN];
 
 int main(int argc, char ** argv)
 {
-    int i,j;
+
+    int i,j,a;
+    key_t k;
+    int shmid;
+    int N = 2;    //?????
+    pid_t pid;
     uchar *image;
     camera c;
     point eye;
     point lookat;
-    int samples; 
-    int s;    
+    int samples;
+    int s;
     float rcp_samples;// = 1.0 / (float)samples;
+    int blocksize = c.view.width/N;
     //char fname[20];
     //ray * rays;
     //color cor;
@@ -278,7 +289,12 @@ int main(int argc, char ** argv)
     setupCamera(&c);
 
     //---malloc the image frame---
-    image = (uchar *) malloc(c.view.width * c.view.height * 3 * sizeof(uchar));
+    //image = (uchar *) malloc(c.view.width * c.view.height * 3 * sizeof(uchar));
+
+    k = ftok("/home/larissapires/SOR/Processos/simpleRT.c",'R');
+    shmid = shmget(k, c.view.width * c.view.height * 3 * sizeof(uchar), 0644|IPC_CREAT);
+    image = shmat(shmid, (void*)0, 0); //pai associa-se a regiao compartilhada
+
     if(image == NULL)
     {
         fprintf(stderr,"Error. Cannot malloc image frame.\n");
@@ -305,37 +321,59 @@ int main(int argc, char ** argv)
     //---ray tracing loop---
 
     samples = 8;
-    s = 0;    
+    s = 0;
     rcp_samples = 1.0 / (float)samples;
 
-    for(i = 0 ; i < c.view.width ; i++)
+    for(a = 0; a < N; a++)//
     {
-        for(j = 0 ; j < c.view.height ; j++)
+      pid = fork();
+
+      if(pid < 0)
+      {
+        fprintf(stderr,"erro, nao eh possivel criar processo filho\n");
+        return 1;
+      }
+      else if(pid == 0) //filho
+      {
+        for(i = a * blocksize; i < (a+1) * blocksize; i++) //para cada coluna do varimento - mesmo numero de colunas em um bloco
         {
-            float r, g, b;
-            r = g = b = 0.0;
+            for(j = 0 ; j < c.view.height ; j++)  //para cada pixel da coluna de varimento
+            {
+              //Determinar o raio que une o centro de projecção com o pixel
+                float r, g, b;
+                r = g = b = 0.0;
 
-            for(s=0; s<samples; s++) {
-                ray rr = get_primary_ray(&c,i,j,s);    
-                color col = trace(c,&rr,0);
-                r += col.r;
-                g += col.g;
-                b += col.b;
+                for(s=0; s<samples; s++) { //Para cada objecto da cena
+                  //Se  o  raio  intersecta  o  objecto  e  o  ponto  de  intersecção  encontra-se mais  próximo  do  centro  de  projecção  do  que  o  ponto  de intersecção até agora encontrado
+                    ray rr = get_primary_ray(&c,i,j,s);
+                    color col = trace(c,&rr,0);
+                    r += col.r;
+                    g += col.g;
+                    b += col.b;
+                  }
+              //Registar o ponto de intersecção e o objecto intersectado
+                r = r * rcp_samples;
+                g = g * rcp_samples;
+                b = b * rcp_samples;
+
+              //ray rr = get_primary_ray(&c, i, j, samples);
+              //color clr = trace(c,&rr,0);
+
+              //red green blue color components
+              //Atribuir  ao  pixel  a  cor  do  objecto  intersectado  no  ponto  de  intersecção registado
+                image[ 3* (i * c.view.height + j) + 0] = floatToIntColor(r);
+                image[ 3* (i * c.view.height + j) + 1] = floatToIntColor(g);
+                image[ 3* (i * c.view.height + j) + 2] = floatToIntColor(b);
+              }
             }
+            exit(0);    //encerra tal filho
+          }
+      else //pai
+      {
 
-            r = r * rcp_samples;
-            g = g * rcp_samples;
-            b = b * rcp_samples;
-
-            //ray rr = get_primary_ray(&c, i, j, samples); 
-            //color clr = trace(c,&rr,0);
-
-            //red green blue color components
-            image[ 3* (i * c.view.height + j) + 0] = floatToIntColor(r);
-            image[ 3* (i * c.view.height + j) + 1] = floatToIntColor(g);
-            image[ 3* (i * c.view.height + j) + 2] = floatToIntColor(b);
-        }
+      }
     }
+    while(wait(NULL) > 0);    //encerra o pai
 
     //printPrimaryRays(rays,c.view.width*c.view.height); //for testing only
 
