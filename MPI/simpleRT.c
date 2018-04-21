@@ -4,9 +4,10 @@
 #include <string.h>
 #include <float.h>
 
-// ** // ** // ** // ** // ** // ** // ** //
+/*
+* Inclue a biblioteca do MPI
+*/
 #include <mpi.h>
-// ** // ** // ** // ** // ** // ** // ** //
 
 #define TRUE (0==0)
 #define FALSE (0==1)
@@ -88,7 +89,7 @@ struct s_sphere
 	point minBB;
 	color c;
 	float cr;
-	float kd; //[0,1] 
+	float kd; //[0,1]
 	float kf; //[0,1]
 	float r;
 
@@ -227,6 +228,7 @@ color shade(camera cam, point *incid , enum object obj, int index, point *p, int
 
 
 
+
 // CONSTANTS AND GLOBAL VARIABLES
 
 const float epsilon = 0.111f;
@@ -250,9 +252,10 @@ point urand[NRAN];
 int irand[NRAN];
 
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
 	int i,j;
-	uchar *imagem;
+	uchar *imagem_pai;
 	uchar *imagem_filho;
 	camera c;
 	point eye;
@@ -261,22 +264,35 @@ int main(int argc, char *argv[]) {
 	int s;
 	float rcp_samples;// = 1.0 / (float)samples;
 
-	int num_trabalhadores, rank, len, mpi_status,mensagem;
+	/**
+	* Variáveis usadas no MPI
+	*/
+	int num_trabalhadores, rank, len, mpi_status;
 	char hostname[MPI_MAX_PROCESSOR_NAME];
 
+	/*
+	* Inicia o MPI
+	*/
 	mpi_status = MPI_Init (&argc, &argv);
+
+	/*
+	* Verifica se foi criado com sucesso.
+	*/
 	if (mpi_status != MPI_SUCCESS) {
-		printf( "Erro ao iniciar MPI %d de %d\n", rank, num_trabalhadores );
+		printf( "Erro ao iniciar trabalhador %d de %d\n", rank, num_trabalhadores );
 		MPI_Abort(MPI_COMM_WORLD,mpi_status);
+		return 0;
 	}
 
 	MPI_Comm_size(MPI_COMM_WORLD, &num_trabalhadores);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Get_processor_name(hostname, &len);
 
-
+	/*
+	* verifica se (número de trabalhadores - 1) é divisível pola largura da imagem
+	*/
 	if (WID % (num_trabalhadores-1) != 0) {
-		printf("O numero de trabalhdores %d nao e divisivel por %d\n", num_trabalhadores,WID);
+		printf("O numero de trabalhdores %d nao e divisivel por %d\n", (num_trabalhadores - 1),WID);
 		MPI_Finalize();
 		return 0;
 	}
@@ -320,41 +336,49 @@ int main(int argc, char *argv[]) {
 	s = 0;
 	rcp_samples = 1.0 / (float)samples;
 
+	/*
+	* Define quantas colunas cada trabalhador vai calcular
+	*/
 	int colunas = WID/(num_trabalhadores - 1);
 
-	// Trabalhador pai
+	/*
+	* Trabalhador PAI
+	*/
 	if (rank == 0) {
 
-		imagem = (uchar *) malloc(c.view.width * c.view.height * 3 * sizeof(uchar));
-		if(imagem == NULL){
+		// Aloca espaço na memória para a imagem completa
+		imagem_pai = (uchar *) malloc(c.view.width * c.view.height * 3 * sizeof(uchar));
+		if(imagem_pai == NULL){
 			fprintf(stderr,"Error. Cannot malloc image frame.\n");
-			MPI_Abort(MPI_COMM_WORLD,mpi_status);
+			MPI_Finalize();
 			return 0;
 		}
-		initImage(&c,imagem);
 
 		for (int i = 1; i < num_trabalhadores; i++){
-			MPI_Recv(&imagem[(3*c.view.height*colunas)*(i-1)], (colunas * c.view.height * 3), MPI_UNSIGNED_CHAR, i, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			MPI_Recv(&imagem_pai[(3*c.view.height*colunas)*(i-1)], (colunas * c.view.height * 3 * sizeof(uchar)), MPI_UNSIGNED_CHAR, i, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 		}
-		if(save_bmp("output_rt.bmp",&c,imagem) != 0) {
+		if(save_bmp("output_rt.bmp",&c,imagem_pai) != 0) {
 			fprintf(stderr,"Cannot write image 'output.bmp'.\n");
 			return 0;
 		}
-		free(imagem);
+		free(imagem_pai);
 	}
-	// Trabalhadores filhos
+	/*
+	* Trabalhadores FILHOS
+	*/
 	else{
 
+		// Aloca espaço na memória para a imagem que cada filho vai trabalhar
 		imagem_filho = (uchar *) malloc(colunas * c.view.height * 3 * sizeof(uchar));
 		if(imagem_filho == NULL){
 			fprintf(stderr,"Error. Cannot malloc image frame.\n");
-			MPI_Abort(MPI_COMM_WORLD,mpi_status);
+			MPI_Finalize();
 			return 0;
 		}
-		// initImage(&c,imagem_filho);
 
-		int inf = (rank-1)*colunas;
-        int sup = rank*colunas;
+		// Calcula os limites inferiores e superiores
+		int inf = (rank * colunas) - colunas;
+        int sup = (rank * colunas);
 
 		for(i = inf ; i < sup ; i++)
 		{
@@ -384,7 +408,7 @@ int main(int argc, char *argv[]) {
 				imagem_filho[ 3* ((i - inf) * c.view.height + j) + 2] = floatToIntColor(b);
 			}
 		}
-		MPI_Send(imagem_filho, (colunas * c.view.height * 3), MPI_UNSIGNED_CHAR, 0, 1, MPI_COMM_WORLD);
+		MPI_Send(imagem_filho, (colunas * c.view.height * 3 * sizeof(uchar)), MPI_UNSIGNED_CHAR, 0, 1, MPI_COMM_WORLD);
 		free(imagem_filho);
 	}
 

@@ -3,6 +3,10 @@
 #include <math.h>
 #include <string.h>
 #include <float.h>
+
+/*
+* Inclue a biblioteca de Processos
+*/
 #include <sys/types.h>
 #include <unistd.h>
 #include <sys/ipc.h>
@@ -227,7 +231,6 @@ color trace(camera cam, ray *raio, int iter);
 color shade(camera cam, point *incid , enum object obj, int index, point *p, int iter);
 
 
-
 // CONSTANTS AND GLOBAL VARIABLES
 
 const float epsilon = 0.111f;
@@ -251,14 +254,33 @@ point urand[NRAN];
 int irand[NRAN];
 
 
-int main(int argc, char ** argv)
+int main(int argc, char *argv[])
 {
+	/**
+	* Verifica se o usuário colocou a quantidade de processoas a serem criados
+	*/
+	if (argc < 2) {
+		printf("Como rodar: $ %s <numero de processos>\n", argv[0] );
+		exit(1);
+	}
 
-	int i,j,a;
+	/**
+	* Variáveis usadas no processo
+	*/
+	int num_processos = strtol(argv[1], NULL, 10);
 	key_t k;
 	int shmid;
-	int N = 2;    //?????
 	pid_t pid;
+
+	/**
+	* Verifica se a quantidade de processos é divisível pela largura
+	*/
+	if (WID % (num_processos) != 0) {
+		printf("O numero de processos %d nao e divisivel por %d\n", num_processos,WID);
+		return 0;
+	}
+
+	int i,j;
 	uchar *image;
 	camera c;
 	point eye;
@@ -266,7 +288,7 @@ int main(int argc, char ** argv)
 	int samples;
 	int s;
 	float rcp_samples;// = 1.0 / (float)samples;
-	//int blocksize = c.view.width/N;
+
 	//char fname[20];
 	//ray * rays;
 	//color cor;
@@ -289,17 +311,21 @@ int main(int argc, char ** argv)
 	setupCamera(&c);
 
 	//---malloc the image frame---
-	//image = (uchar *) malloc(c.view.width * c.view.height * 3 * sizeof(uchar));
-	int blocksize = c.view.width/N;
 	k = ftok("/home/larissapires/SOR/Processos/simpleRT.c",'R');
 	shmid = shmget(k, c.view.width * c.view.height * 3 * sizeof(uchar), 0644|IPC_CREAT);
-	image = shmat(shmid, (void*)0, 0); //pai associa-se a regiao compartilhada
 
+	//pai associa-se a regiao compartilhada
+	image = shmat(shmid, (void*)0, 0);
 	if(image == NULL)
 	{
 		fprintf(stderr,"Error. Cannot malloc image frame.\n");
 		return 0;
 	}
+
+	/*
+	* Define quantas colunas cada processo vai calcular
+	*/
+	int colunas = WID/num_processos;
 
 	//---just init the image frame with some data---
 	initImage(&c,image);
@@ -324,15 +350,15 @@ int main(int argc, char ** argv)
 	s = 0;
 	rcp_samples = 1.0 / (float)samples;
 
-	for(a = 0; a < N; a++) {
+	for(int a = 0; a < num_processos; a++) {
 		pid = fork();
 
 		if(pid < 0) {
-			fprintf(stderr,"Erro, nao eh possivel criar processo filho\n");
+			fprintf(stderr,"Erro, nao foi possivel criar o processo filho\n");
 			return 1;
 		}
 		else if(pid == 0) {
-			for(i = a * blocksize; i < (a+1) * blocksize; i++)
+			for(i = a * colunas; i < (a+1) * colunas; i++)
 			{
 				for(j = 0 ; j < c.view.height ; j++)  //para cada pixel da coluna de varimento
 				{
@@ -363,14 +389,15 @@ int main(int argc, char ** argv)
 					image[ 3* (i * c.view.height + j) + 2] = floatToIntColor(b);
 				}
 			}
-			exit(0);    //encerra tal filho
+			exit(0); //encerra o filho
 		}
 		else //pai
 		{
 
 		}
 	}
-	while(wait(NULL) > 0);    //encerra o pai
+	//encerra o pai
+	while(wait(NULL) > 0);
 
 	//printPrimaryRays(rays,c.view.width*c.view.height); //for testing only
 
