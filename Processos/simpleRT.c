@@ -257,7 +257,7 @@ int main(int argc, char *argv[])
 	* Verifica se o usuário colocou a quantidade de processoas a serem criados
 	*/
 	if (argc < 2) {
-		printf("Como rodar: $ %s <numero de processos>\n", argv[0] );
+		printf("Especifique o numero de processos -> $ %s <numero de processos>\n", argv[0] );
 		exit(1);
 	}
 
@@ -265,9 +265,9 @@ int main(int argc, char *argv[])
 	* Variáveis usadas no processo
 	*/
 	int num_processos = strtol(argv[1], NULL, 10);
-	key_t k;
-	int shmid;
-	pid_t pid;
+	key_t k = 0;
+	int shmid = 0;
+	pid_t pid = 0;
 
 	/**
 	* Verifica se a quantidade de processos é divisível pela largura
@@ -308,11 +308,12 @@ int main(int argc, char *argv[])
 	setupCamera(&c);
 
 	//---malloc the image frame---
+
 	k = ftok("/home/larissapires/SOR/Processos/simpleRT.c",'R');
 	shmid = shmget(k, c.view.width * c.view.height * 3 * sizeof(uchar), 0644|IPC_CREAT);
-
 	//pai associa-se a regiao compartilhada
 	image = shmat(shmid, (void*)0, 0);
+
 	if(image == NULL)
 	{
 		fprintf(stderr,"Error. Cannot malloc image frame.\n");

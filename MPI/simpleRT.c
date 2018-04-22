@@ -271,10 +271,6 @@ int main(int argc, char *argv[])
 	* Inicia o MPI
 	*/
 	mpi_status = MPI_Init (&argc, &argv);
-
-	/*
-	* Verifica se foi criado com sucesso.
-	*/
 	if (mpi_status != MPI_SUCCESS) {
 		printf( "Erro ao iniciar trabalhador %d de %d\n", rank, num_trabalhadores );
 		MPI_Abort(MPI_COMM_WORLD,mpi_status);
@@ -352,7 +348,8 @@ int main(int argc, char *argv[])
 		}
 
 		for (int i = 1; i < num_trabalhadores; i++){
-			MPI_Recv(&imagem_pai[(3*c.view.height*colunas)*(i-1)], (colunas * c.view.height * 3 * sizeof(uchar)), MPI_UNSIGNED_CHAR, i, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			MPI_Recv(&imagem_pai[(3*c.view.height*colunas)*(i-1)], (colunas * c.view.height * 3 *
+				sizeof(uchar)), MPI_UNSIGNED_CHAR, i, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 		}
 		if(save_bmp("output_rt.bmp",&c,imagem_pai) != 0) {
 			fprintf(stderr,"Cannot write image 'output.bmp'.\n");
@@ -364,7 +361,6 @@ int main(int argc, char *argv[])
 	* Trabalhadores FILHOS
 	*/
 	else{
-
 		// Aloca espaço na memória para a imagem que cada filho vai trabalhar
 		imagem_filho = (uchar *) malloc(colunas * c.view.height * 3 * sizeof(uchar));
 		if(imagem_filho == NULL){
@@ -405,7 +401,8 @@ int main(int argc, char *argv[])
 				imagem_filho[ 3* ((i - inf) * c.view.height + j) + 2] = floatToIntColor(b);
 			}
 		}
-		MPI_Send(imagem_filho, (colunas * c.view.height * 3 * sizeof(uchar)), MPI_UNSIGNED_CHAR, 0, 1, MPI_COMM_WORLD);
+		MPI_Send(imagem_filho, (colunas * c.view.height * 3 * sizeof(uchar)),
+				MPI_UNSIGNED_CHAR, 0, 1, MPI_COMM_WORLD);
 		free(imagem_filho);
 	}
 
