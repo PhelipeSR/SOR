@@ -4,9 +4,6 @@
 #include <string.h>
 #include <float.h>
 
-/*
-* Inclue a biblioteca do MPI
-*/
 #include <mpi.h>
 
 #define TRUE (0==0)

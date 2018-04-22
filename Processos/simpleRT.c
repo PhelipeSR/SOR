@@ -4,9 +4,6 @@
 #include <string.h>
 #include <float.h>
 
-/*
-* Inclue a biblioteca de Processos
-*/
 #include <sys/types.h>
 #include <unistd.h>
 #include <sys/ipc.h>
