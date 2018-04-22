@@ -1,229 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
-#include <string.h>
-#include <float.h>
-
-#define TRUE (0==0)
-#define FALSE (0==1)
-
-#define MAX_BYTE 255
-#define MAX_DEPTH 3
-#define N_SPHERES 2
-#define N_LIGHTS 2
-
-#define AREA 500
-#define SPHERE_RAY 10
-
-//floating point init data
-#define AMBIENT 0.35f
-#define LIGHT_INT 3.5f
-
-//scale texture
-#define TEXTURE_SCALE 0.5f
-
-#define WID 1280
-#define HEI 800
-
-#define PI ((float) (355/113))
-#define FOV			((float) (PI/4))		/* field of view in rads (pi/4) */
-#define HALF_FOV		(FOV * 0.5)
-#define NRAN	1024
-#define MASK	(NRAN - 1)
-
-#define RAY_MAG 1000
-
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-//STRUCTURES
-
-
-struct c_color
-{
-    float r;
-    float g;
-    float b;
-    float alpha;
-
-}typedef color;
-
-struct p_point
-{
-    float x;
-    float y;
-    float z;
-}typedef point;
-
-struct r_ray
-{
-    point o;
-    point d;
-}typedef ray;
-
-struct v_viewport
-{
-    int width;
-    int height;
-}typedef viewport;
-
-struct c_camera
-{
-    point eye;
-    point lookat;
-    point up,u,v,w;
-    float distance;
-    viewport view;
-}typedef camera;
-
-struct s_sphere
-{
-    point center;
-    point maxBB;
-    point minBB;
-    color c;
-    float cr;
-    float kd; //[0,1] 
-    float kf; //[0,1]
-    float r;
-
-    int e;
-    float ks;
-}typedef sphere;
-
-struct o_open_cylinder
-{
-    float bottom;
-    float top;
-    float r;
-
-    point maxBB;
-    point minBB;
-    color c;
-    float cr;
-    float kd; //[0,1] 
-    float kf; //[0,1]
-
-    int e;
-    float ks;
-}typedef open_cylinder;
-
-struct r_rectangle
-{
-    point p0;
-    point a;
-    point b;
-
-    color c;
-    float cr;
-    float kd; //[0,1] 
-    float kf; //[0,1]
-
-    int e;
-    float ks;
-}typedef rectangle;
-
-struct p_plane
-{
-    point normal;
-    color c;
-    float d;
-
-    float cr;
-    float kd; //[0,1] 
-    float kf; //[0,1]
-    int e;
-    float ks;
-
-    point m_uAxis;
-    point m_vAxis;
-}typedef plane;
-
-struct p_light
-{
-    float ls; //light intensity
-    point l; //light coordinates
-    color c; //light color
-}typedef ponctual_light;
-
-//struct g_grid
-//{
-//	point p0;
-//	point p1;
-//	int nx, ny, nz;
-//	int total;
-//}typedef grid;
-
-enum object {
-    NONE,
-    SPHERE,
-    PLANE,
-    OPEN_CYLINDER,
-    RECTANGLE,
-    CONE,
-    BOX
-};
-
-typedef unsigned char uchar;
-
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-// FUNCTIONS 
-ray get_primary_ray(camera *cam, int x, int y, int sample);
-point get_sample_pos(int x, int y, int sample);
-point jitter(int x, int y, int s);
-void generateScene();
-
-void addVec(point *a, point *b);
-void subVec(point *a, point *b);
-void scalarMulVec(point *a,float sc);
-
-//int inside_grid(grid *gr, point * p);
-void initImage(camera *c,uchar * frame);
-//void setupGrid(grid *g,point max, point min, int nx, int ny, int nz);
-ray * generatePrimaryRays(camera *c);
-float dist(point *o , point *d);
-void setupCamera(camera *c);
-void initCamera(camera *c, point eye, point lookat, int width, int height);
-void printPrimaryRays(ray *r, int size);
-void normalize(point *a);
-void crossProduct(point *a, point *b, point *r);
-float dotProduct(point *a, point *b);
-float distancia(point a, point b);
-float clamp(float x, float min, float max);
-float m_max(float a,float b);
-float m_min(float a,float b);
-//void intersectBoundingBox(grid * gr, ray * raio, point *t_min, point *t_max, float *t0, float *t1);
-int save_bmp(char * file_name, camera *c, uchar *frame);
-
-int intersectSphere(sphere * s, ray * r, float *t);
-int intersectPlane(plane *p, ray *r, float *t);
-int intersectOpenCylinder(open_cylinder *cylinder, ray *r, float *t_res);
-int intersectRectangle(rectangle *rec, ray *r, float *t);
-
-enum object intersect3Dscene(int *idx,ray *r, float *t);
-
-void gamut(float *r, float *g, float *b);
-float checkerTexture(float u, float v);
-
-//generate random spheres into the global 'data' array and lights into 'lights' array
-void generateRandomSpheres();
-void generateRandomLightSources();
-
-//conversion from Float to Uchar
-uchar floatToIntColor(float c);
-
-//actual ray tracing CORE functions
-
-color trace(camera cam, ray *raio, int iter);
-color shade(camera cam, point *incid , enum object obj, int index, point *p, int iter);
-
-
-
-// CONSTANTS AND GLOBAL VARIABLES
+#include "function.h"
 
 const float epsilon = 0.111f;
 
@@ -246,118 +21,6 @@ point urand[NRAN];
 int irand[NRAN];
 
 
-int main(int argc, char ** argv)
-{
-    int i,j;
-    uchar *image;
-    camera c;
-    point eye;
-    point lookat;
-    int samples; 
-    int s;    
-    float rcp_samples;// = 1.0 / (float)samples;
-    //char fname[20];
-    //ray * rays;
-    //color cor;
-
-    //srand ( time(NULL) );
-
-    //---init virtual camera---
-    //point eye = {10.0f,400.0f,1000.0f};
-    //point eye = {0.0f,2.0f,-20.0f};
-    eye.x = 0.0f;
-    eye.y = 2.0f;
-    eye.z = -20.0f;
-
-    //point lookat = {0.5f,0.0f,0.0f};
-    lookat.x = 0.5f;
-    lookat.y = 0.0f;
-    lookat.z = 0.0f;
-
-    initCamera(&c,eye,lookat,WID,HEI);
-    setupCamera(&c);
-
-    //---malloc the image frame---
-    image = (uchar *) malloc(c.view.width * c.view.height * 3 * sizeof(uchar));
-    if(image == NULL)
-    {
-        fprintf(stderr,"Error. Cannot malloc image frame.\n");
-        return 0;
-    }
-
-    //---just init the image frame with some data---
-    initImage(&c,image);
-
-    //---insert random N_SPHERES into the 'data' array
-    //generateRandomSpheres();
-    generateScene();
-
-    //---insert random N_LIGHTS into the 'lights' array
-    generateRandomLightSources();
-
-    //---create a 1D array with primary rays coordinates
-    //rays = generatePrimaryRays(&c);
-
-    for(i=0; i<NRAN; i++) urand[i].x = (double)rand() / RAND_MAX - 0.5;
-    for(i=0; i<NRAN; i++) urand[i].y = (double)rand() / RAND_MAX - 0.5;
-    for(i=0; i<NRAN; i++) irand[i] = (int)(NRAN * ((double)rand() / RAND_MAX));
-
-    //---ray tracing loop---
-
-    samples = 8;
-    s = 0;    
-    rcp_samples = 1.0 / (float)samples;
-
-    for(i = 0 ; i < c.view.width ; i++)
-    {
-        for(j = 0 ; j < c.view.height ; j++)
-        {
-            float r, g, b;
-            r = g = b = 0.0;
-
-            for(s=0; s<samples; s++) {
-                ray rr = get_primary_ray(&c,i,j,s);    
-                color col = trace(c,&rr,0);
-                r += col.r;
-                g += col.g;
-                b += col.b;
-            }
-
-            r = r * rcp_samples;
-            g = g * rcp_samples;
-            b = b * rcp_samples;
-
-            //ray rr = get_primary_ray(&c, i, j, samples); 
-            //color clr = trace(c,&rr,0);
-
-            //red green blue color components
-            image[ 3* (i * c.view.height + j) + 0] = floatToIntColor(r);
-            image[ 3* (i * c.view.height + j) + 1] = floatToIntColor(g);
-            image[ 3* (i * c.view.height + j) + 2] = floatToIntColor(b);
-        }
-    }
-
-    //printPrimaryRays(rays,c.view.width*c.view.height); //for testing only
-
-    if(save_bmp("output_rt.bmp",&c,image) != 0)
-    {
-        fprintf(stderr,"Cannot write image 'output.bmp'.\n");
-        return 0;
-    }
-
-    //---freeing data---
-    //free(rays);
-    free(image);
-
-    //---exit---
-    return 0;
-}
-
-
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
 ray get_primary_ray(camera *cam, int x, int y, int sample) {
     ray ray;
     float m[3][3];
@@ -367,7 +30,7 @@ ray get_primary_ray(camera *cam, int x, int y, int sample) {
     k.y = cam->lookat.y - cam->eye.y;
     k.z = cam->lookat.z - cam->eye.z;
 
-    normalize(&k);	
+    normalize(&k);
     //NORMALIZE(k);
 
     crossProduct(&j,&k,&i);
@@ -434,8 +97,7 @@ point jitter(int x, int y, int s) {
     return pt;
 }
 
-void gamut(float *r, float *g, float *b)
-{
+void gamut(float *r, float *g, float *b) {
     float max = m_max(*r,m_max(*g,*b));
     if(max > 1.0f)
     {
@@ -445,72 +107,30 @@ void gamut(float *r, float *g, float *b)
     }
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-void addVec(point *a, point *b)
-{
+void addVec(point *a, point *b) {
     a->x = a->x + b->x;
     a->y = a->y + b->y;
     a->z = a->z + b->z;
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-void subVec(point *a, point *b)
-{
+void subVec(point *a, point *b) {
     a->x = a->x - b->x;
     a->y = a->y - b->y;
     a->z = a->z - b->z;
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-void scalarMulVec(point *a,float sc)
-{
+void scalarMulVec(point *a,float sc) {
     a->x = a->x*sc;
     a->y = a->y*sc;
     a->z = a->z*sc;
 }
 
+float dist(point *o , point *d) {
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-
-//int inside_grid(grid *gr, point * p) {
-//	if ((p->x > gr->p0.x) && (p->x < gr->p1.x)) {
-//		if ((p->y > gr->p0.y) && (p->y < gr->p1.y)) {
-//			if ((p->z > gr->p0.z) && (p->z < gr->p1.z)) {
-//				return TRUE;
-//			}
-//		}
-//	}
-//	return FALSE;
-//}
-
-
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-float dist(point *o , point *d)
-{
     return sqrt((d->x - o->x)*(d->x - o->x) + (d->y - o->y)*(d->y - o->y) + (d->z - o->z)*(d->z - o->z));
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-void normalize(point *a)
-{
+void normalize(point *a) {
     float m = a->x*a->x + a->y*a->y + a->z*a->z;
     m = sqrt(m);
     a->x = a->x/m;
@@ -518,40 +138,23 @@ void normalize(point *a)
     a->z = a->z/m;
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-void crossProduct(point *a, point *b, point *r)
-{
+void crossProduct(point *a, point *b, point *r) {
     r->x = a->y*b->z - a->z*b->y;
     r->y = a->z*b->x - a->x*b->z;
     r->z = a->x*b->y - a->y*b->x;
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
+float dotProduct(point *a, point *b) {
 
-float dotProduct(point *a, point *b)
-{
     return a->x*b->x + a->y*b->y + a->z*b->z;
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
 float clamp(float x, float min, float max) {
+
     return (x < min ? min : (x > max ? max : x));
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-void setupCamera(camera *c)
-{
+void setupCamera(camera *c) {
     //don't use anymore
 
     c->w.x = c->eye.x - c->lookat.x;
@@ -564,21 +167,14 @@ void setupCamera(camera *c)
     normalize(&c->u);
 
     crossProduct(&c->u,&c->w,&c->v);
-    normalize(&c->v);	
+    normalize(&c->v);
 
     //printf("u: %f %f %f\n",c->u.x,c->u.y,c->u.z);
     //printf("v: %f %f %f\n",c->v.x,c->v.y,c->v.z);
     //printf("w: %f %f %f\n",c->w.x,c->w.y,c->w.z);
-
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-
-void initCamera(camera *c, point eye, point lookat, int width, int height)
-{
+void initCamera(camera *c, point eye, point lookat, int width, int height) {
     //c->eye.x = -200;
     //c->eye.y = 200;
     //c->eye.z = 600;
@@ -606,17 +202,11 @@ void initCamera(camera *c, point eye, point lookat, int width, int height)
     c->view.width = width;
     c->view.height = height;
 
-    //c->distance = dist(&c->eye,&c->lookat); 
+    //c->distance = dist(&c->eye,&c->lookat);
     c->distance = 1.0f/HALF_FOV;
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-
-ray * generatePrimaryRays(camera *c)
-{
+ray * generatePrimaryRays(camera *c) {
     int i,j = 0;
     float xv = 0;
     float yv = 0;
@@ -644,13 +234,7 @@ ray * generatePrimaryRays(camera *c)
     return res;
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-void printPrimaryRays(ray *r, int size)
-{
+void printPrimaryRays(ray *r, int size) {
     int i;
 
     for(i = 0 ; i < size ; i ++)
@@ -659,94 +243,17 @@ void printPrimaryRays(ray *r, int size)
     }
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
+float m_max(float a, float b) {
 
-
-//void setupGrid(grid *g,point max, point min, int nx, int ny, int nz)
-//{
-//    g->p0 = min;
-//    g->p1 = max;
-//    g->nx = nx;
-//    g->ny = ny;
-//    g->nz = nz;
-//    g->total = nx*ny*nz;
-//}
-
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-float m_max(float a, float b)
-{
     return a>b?a:b;
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
+float m_min(float a, float b) {
 
-float m_min(float a, float b)
-{
     return a<b?a:b;
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-//void intersectBoundingBox(grid * gr, ray * r, point *t_min, point *t_max, float *t0, float *t1)
-//{
-//        float a;
-//        float b;
-//        float c;
-//
-//	point rd;
-//
-//	rd.x = r->d.x - r->o.x;
-//	rd.y = r->d.y - r->o.y;
-//	rd.z = r->d.z - r->o.z;
-//	normalize(&rd);
-//
-//	a = 1.0f/rd.x;
-//	b = 1.0f/rd.y;
-//	c = 1.0f/rd.z;
-//
-//	if (a >= 0) {
-//		t_min->x = (gr->p0.x - r->o.x)*a;
-//		t_max->x = (gr->p1.x - r->o.x)*a;
-//	} else {
-//		t_min->x = (gr->p1.x - r->o.x)*a;
-//		t_max->x = (gr->p0.x - r->o.x)*a;
-//	}
-//
-//	if (b >= 0) {
-//		t_min->y = (gr->p0.y - r->o.y)*b;
-//		t_max->y = (gr->p1.y - r->o.y)*b;
-//	} else {
-//		t_min->y = (gr->p1.y - r->o.y)*b;
-//		t_max->y = (gr->p0.y - r->o.y)*b;
-//	}
-//
-//	if (c >= 0) {
-//		t_min->z = (gr->p0.z - r->o.z)*c;
-//		t_max->z = (gr->p1.z - r->o.z)*c;
-//	} else {
-//		t_min->z = (gr->p1.z - r->o.z)*c;
-//		t_max->z = (gr->p0.z - r->o.z)*c;
-//	}
-//
-//	*t0 = m_max(m_max(t_min->x, t_min->y), t_min->z);
-//	*t1 = m_min(m_min(t_max->x, t_max->y), t_max->z);
-//}
-
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-void initImage(camera *c,uchar * frame)
-{
+void initImage(camera *c,uchar * frame) {
     int i;
     for(i = 0 ; i < c->view.height*c->view.width ; i ++)
     {
@@ -765,12 +272,7 @@ void initImage(camera *c,uchar * frame)
     }
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-int save_bmp(char * file_name, camera *c, uchar *frame)
-{
+int save_bmp(char * file_name, camera *c, uchar *frame) {
     FILE *fpBMP;
 
     int i, j;
@@ -845,12 +347,7 @@ int save_bmp(char * file_name, camera *c, uchar *frame)
     return 0;
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-enum object intersect3Dscene(int *idx, ray *r, float *t)
-{
+enum object intersect3Dscene(int *idx, ray *r, float *t) {
     enum object obj = NONE;
     int k = 0;
 
@@ -947,12 +444,7 @@ enum object intersect3Dscene(int *idx, ray *r, float *t)
     return obj;
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//----------------------------------------------------------------------------------------- 
-
-color trace(camera cam,ray *r, int iter)
-{
+color trace(camera cam,ray *r, int iter) {
     float max_dist = FLT_MAX;
     float lowest_dist;
     int index = -1;
@@ -989,7 +481,7 @@ color trace(camera cam,ray *r, int iter)
             //call the shade function and, after that, returns the result of the function
             return shade(cam,&dir,obj,index,&intersection,iter);
 
-            //return white; //just for testing and learning what the shade function actually does. 
+            //return white; //just for testing and learning what the shade function actually does.
         }
         else
         {
@@ -1000,12 +492,7 @@ color trace(camera cam,ray *r, int iter)
     return black;
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-color shade(camera cam,point *incid ,enum object obj, int index, point *p, int iter)
-{
+color shade(camera cam,point *incid ,enum object obj, int index, point *p, int iter) {
     enum object ob;
     point normal;
     point ldir;
@@ -1028,7 +515,7 @@ color shade(camera cam,point *incid ,enum object obj, int index, point *p, int i
     point reflexao;
     point normal_aux;// = normal;
     point normal_aux2;// = normal;
-    point light_reflection;	
+    point light_reflection;
 
     if(obj == SPHERE)
     {
@@ -1318,12 +805,7 @@ color shade(camera cam,point *incid ,enum object obj, int index, point *p, int i
     return res;
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-int intersectOpenCylinder(open_cylinder *cylinder, ray *r, float *t_res)
-{
+int intersectOpenCylinder(open_cylinder *cylinder, ray *r, float *t_res) {
     float t,a,b,c,disc,e,yhit,denom;
     float ox = r->o.x;
     float oy = r->o.y;
@@ -1340,14 +822,14 @@ int intersectOpenCylinder(open_cylinder *cylinder, ray *r, float *t_res)
     dy = dy/temp;
     dz = dz/temp;
 
-    a = dx * dx + dz * dz;  	
-    b = 2.0f * (ox * dx + oz * dz);					
+    a = dx * dx + dz * dz;
+    b = 2.0f * (ox * dx + oz * dz);
     c = ox * ox + oz * oz - cylinder->r * cylinder->r;
     disc = b * b - 4.0f * a * c ;
 
     if (disc < 0.0f)
         return FALSE;
-    else {	
+    else {
         e = sqrt(disc);
         denom = 2.0f * a;
         t = (-b - e) / denom;    // smaller root
@@ -1364,10 +846,10 @@ int intersectOpenCylinder(open_cylinder *cylinder, ray *r, float *t_res)
                 //	sr.normal = -sr.normal;
                 return TRUE;
             }
-        } 
+        }
 
         t = (-b + e) / denom;    // larger root
-        *t_res = t;	
+        *t_res = t;
 
         if (t > 0) {
             yhit = oy + t * dy;
@@ -1381,19 +863,13 @@ int intersectOpenCylinder(open_cylinder *cylinder, ray *r, float *t_res)
 
                 return TRUE;
             }
-        } 
+        }
     }
     return FALSE;
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
 //Requires Suqare Root
-
-int intersectSphere(sphere * s, ray * r, float *t)
-{
+int intersectSphere(sphere * s, ray * r, float *t) {
     float A,B,C,disc,t0,t1,l,m,n;
     float xd = r->d.x - r->o.x;
     float yd = r->d.y - r->o.y;
@@ -1444,12 +920,7 @@ int intersectSphere(sphere * s, ray * r, float *t)
     return FALSE;
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-void generateScene()
-{
+void generateScene() {
     int i = 0;
 
     data[0].center.x = -1.5f;
@@ -1461,7 +932,7 @@ void generateScene()
     data[0].c.b = 0.05f;
     data[0].e = 50.0f;
     data[0].cr = 0.3f;
-    data[0].kf = 0.8f; 
+    data[0].kf = 0.8f;
 
 
     data[1].center.x = 2.5f;
@@ -1473,7 +944,7 @@ void generateScene()
     data[1].c.b = 1.0f;
     data[1].e = 50.0f;
     data[1].cr = 0.4f;
-    data[1].kf = 0.4f; 
+    data[1].kf = 0.4f;
 
     data[2].center.x = 0;
     data[2].center.y = 1;
@@ -1484,7 +955,7 @@ void generateScene()
     data[2].c.b = 0.1f;
     data[2].e = 60.0f;
     data[2].cr = 0.7f;
-    data[2].kf = 0.7f; 
+    data[2].kf = 0.7f;
 
     for(i = 0 ; i < N_SPHERES ; i++)
     {
@@ -1496,7 +967,7 @@ void generateScene()
         data[i].minBB.y = data[i].center.y - data[i].r;
         data[i].minBB.z = data[i].center.z - data[i].r;
 
-        data[i].kd = 0.5f;	
+        data[i].kd = 0.5f;
         data[i].ks = 0.25f;
     }
 
@@ -1510,7 +981,7 @@ void generateScene()
     cylinder.c.b = 1.0f;
     cylinder.e = 60.0f;
     cylinder.cr = 0.7f;
-    cylinder.kf = 0.5f; 
+    cylinder.kf = 0.5f;
 
     //rectangle
     //data[1].center.x = 2.5f;
@@ -1534,7 +1005,7 @@ void generateScene()
     rect.c.b = 0.8f;
     rect.e = 20.0f;
     rect.cr = 0.7f;
-    rect.kf = 0.3f; 
+    rect.kf = 0.3f;
 
     //also generate a flat ground
     ground.normal.x = 0.0f;
@@ -1558,16 +1029,14 @@ void generateScene()
     ground.m_uAxis.z = -ground.normal.x;
 
     //v axis coordinates for texture
-    crossProduct(&ground.m_uAxis,&ground.normal,&ground.m_vAxis); 
+    crossProduct(&ground.m_uAxis,&ground.normal,&ground.m_vAxis);
 }
 
-
 //will genereate N_SPHERES into the global 'data' array
-void generateRandomSpheres()
-{
+void generateRandomSpheres() {
     int i;
 
-    // uncoment for fixed sphere locations **** 
+    // uncoment for fixed sphere locations ****
 
     //float x = (rand() % AREA) - (rand() % AREA);
     //float y = SPHERE_RAY + 5; // (rand() % AREA) - (rand() % AREA);
@@ -1591,7 +1060,7 @@ void generateRandomSpheres()
            else
            {
            data[i].center.x = data[i-1].center.x + 3*SPHERE_RAY;
-           data[i].center.y = data[i-1].center.y; 
+           data[i].center.y = data[i-1].center.y;
            data[i].center.z = data[i-1].center.z;
            }
            */
@@ -1609,23 +1078,23 @@ void generateRandomSpheres()
         data[i].minBB.z = data[i].center.z - data[i].r;
 
 
-        //RAND_MAX is a constant defined in <cstdlib>. 
+        //RAND_MAX is a constant defined in <cstdlib>.
         //Its default value may vary between implementations
         //but it is granted to be at least 32767.
 
         //random colors
         data[i].c.r = (float) rand()/RAND_MAX;
-        data[i].c.g = (float) rand()/RAND_MAX;        
+        data[i].c.g = (float) rand()/RAND_MAX;
         data[i].c.b = (float) rand()/RAND_MAX;
 
         //fixed colors (from 0 to 1)
         //data[i].c.r = 0.7f;
-        //data[i].c.g = 0.7f;        
+        //data[i].c.g = 0.7f;
         //data[i].c.b = 0.7f;
 
         //printf("data[%d].kf = %f\n",h,data[h].kf);
         data[i].kf = 1.0f;
-        data[i].kd = 0.5f;	
+        data[i].kd = 0.5f;
         data[i].cr = 1.0f;
         data[i].e = 100;
         data[i].ks = 0.25f;
@@ -1654,24 +1123,15 @@ void generateRandomSpheres()
     ground.m_uAxis.z = -ground.normal.x;
 
     //v axis coordinates for texture
-    crossProduct(&ground.m_uAxis,&ground.normal,&ground.m_vAxis); 
+    crossProduct(&ground.m_uAxis,&ground.normal,&ground.m_vAxis);
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
+uchar floatToIntColor(float c) {
 
-uchar floatToIntColor(float c)
-{
     return (uchar) (c * MAX_BYTE);
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-void generateRandomLightSources()
-{
+void generateRandomLightSources() {
 
     /*int i;
 
@@ -1707,17 +1167,10 @@ void generateRandomLightSources()
 
     //light intensity
     lights[1].ls = LIGHT_INT;
-
-
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-int intersectRectangle(rectangle *rec, ray *r, float *t_res)
-{
-    float dx,dy,dz,temp,t1,t2,t,ddota,ddotb,a_len_squared,b_len_squared; 
+int intersectRectangle(rectangle *rec, ray *r, float *t_res) {
+    float dx,dy,dz,temp,t1,t2,t,ddota,ddotb,a_len_squared,b_len_squared;
     point normal,aux1,aux2,p,d;
     crossProduct(&rec->a,&rec->b, &normal);
 
@@ -1778,12 +1231,7 @@ int intersectRectangle(rectangle *rec, ray *r, float *t_res)
     return TRUE;
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-int intersectPlane(plane *p, ray *r, float *t)
-{
+int intersectPlane(plane *p, ray *r, float *t) {
     point rd;
     float d,dist;
 
@@ -1805,12 +1253,7 @@ int intersectPlane(plane *p, ray *r, float *t)
     return FALSE;
 }
 
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-float checkerTexture(float u, float v)
-{
+float checkerTexture(float u, float v){
     float ff = fmod(floor(u*TEXTURE_SCALE) + floor(v*TEXTURE_SCALE),2.0f);
     if(ff < 1.0f && ff > -1.0f)
     {
@@ -1825,14 +1268,3 @@ float checkerTexture(float u, float v)
 
     //return 1.0f;
 }
-
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
-
-
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
-
