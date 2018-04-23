@@ -1,3 +1,4 @@
+#include <omp.h>
 #include "function.h"
 
 point urand[NRAN];

@@ -20,6 +20,8 @@ double aspect = WID/HEI;
 point urand[NRAN];
 int irand[NRAN];
 
+uchar *image;
+camera c;
 
 ray get_primary_ray(camera *cam, int x, int y, int sample) {
     ray ray;
@@ -1268,3 +1270,4 @@ float checkerTexture(float u, float v){
 
     //return 1.0f;
 }
+

@@ -11,14 +11,6 @@
 #include <string.h>
 #include <float.h>
 
-#include <omp.h>
-
-#include <sys/types.h>
-#include <unistd.h>
-#include <sys/ipc.h>
-#include <sys/shm.h>
-#include <sys/wait.h>
-
 // *******************************************************************************************
 // ******DEFINES******************************************************************************
 // *******************************************************************************************
@@ -42,6 +34,8 @@
 #define NRAN 1024
 #define MASK (NRAN - 1)
 #define RAY_MAG 1000
+
+
 
 // *******************************************************************************************
 // ******STRUCTS******************************************************************************
@@ -207,6 +201,5 @@ uchar floatToIntColor(float c);
 
 color trace(camera cam, ray *raio, int iter);
 color shade(camera cam, point *incid , enum object obj, int index, point *p, int iter);
-
 
 #endif
