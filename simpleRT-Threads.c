@@ -14,7 +14,7 @@ int main(int argc, char *argv[]) {
 	* Verifica se o usuário colocou a quantidade de processoas a serem criados
 	*/
 	if (argc < 2) {
-		printf("Especifique o numero de trabalhadores -> $ %s <numero de trabalhadores>\n", argv[0] );
+		printf("Especifique numero de trabalhadores -> $ %s <numero de trabalhadores>\n", argv[0]);
 		exit(1);
 	}
 	num_trabalhadores = strtol(argv[1], NULL, 10);
@@ -67,16 +67,19 @@ int main(int argc, char *argv[]) {
 
 	//array contendo o numero maximo de threads definido ao início do programa
 	pthread_t trabalhadores[num_trabalhadores];
-	int thread_trabalhadora; //thread que vai executar o traçado de raios
-	long razao = WID/num_trabalhadores; //Quantidade de pixels que cada thread deve processar
+	//thread que vai executar o traçado de raios
+	int thread_trabalhadora;
+	//Quantidade de pixels que cada thread deve processar
+	long colunas = WID/num_trabalhadores;
 
 	for(int b = 0; b < num_trabalhadores; b++) {
 		// vai ser enviado para a subrotina da thread a quantidade de pixels
 		// que vai ser processada, e a quantidade de pixels que já foi processada
-		long divisao = (b+1)*razao;
-		thread_trabalhadora = pthread_create(&trabalhadores[b], NULL, threads_trabalhadores,(void*) divisao);
+		long divisao = (b+1)*colunas;
+		thread_trabalhadora = pthread_create(&trabalhadores[b], NULL, threads_trabalhadores,
+			                                 (void*) divisao);
 		if(thread_trabalhadora){
-			printf("Deu merda");
+			printf("Erro");
 		}
 	}
 
@@ -102,20 +105,19 @@ void *threads_trabalhadores(void *blocksize){
 
     long parcial = (long) blocksize;
     float rcp_samples;
-    long i = 0; //contador do for
-    long escalonador = parcial - (WID/num_trabalhadores); //representa a quantidade de pixels já foi processada, pois depende do parâmetro que foi passado do main()
     int samples;
-    int j, s;
-    samples = 8;
     rcp_samples = 1.0 / (float)samples;
-    for(i = escalonador; i < parcial ; i++)
-    {
-        for(j = 0 ; j < c.view.height ; j++)
-        {
+    samples = 8;
+
+    // representa a quantidade de pixels já foi processada,
+    // pois depende do parâmetro que foi passado do main()
+    long escalonador = parcial - (WID/num_trabalhadores);
+    for(int i = escalonador; i < parcial ; i++) {
+        for(int j = 0 ; j < c.view.height ; j++) {
             float r, g, b;
             r = g = b = 0.0;
 
-            for(s=0; s < samples; s++) {
+            for(int s=0; s < samples; s++) {
                 ray rr = get_primary_ray(&c,i,j,s);
                 color col = trace(c,&rr,0);
                 r += col.r;
@@ -136,6 +138,5 @@ void *threads_trabalhadores(void *blocksize){
             image[ 3* (i * c.view.height + j) + 1] = floatToIntColor(g);
             image[ 3* (i * c.view.height + j) + 2] = floatToIntColor(b);
         }
-
     }
 }
