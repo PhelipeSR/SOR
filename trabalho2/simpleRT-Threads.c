@@ -18,13 +18,8 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 	num_trabalhadores = strtol(argv[1], NULL, 10);
-	/**
-	* Verifica se a quantidade de processos é divisível pela largura
-	*/
-	if (WID % (num_trabalhadores) != 0) {
-		printf("O numero de processos %d nao e divisivel por %d\n", num_trabalhadores,WID);
-		return 0;
-	}
+	
+
 	int i;
 	point eye;
 	point lookat;
@@ -68,15 +63,19 @@ int main(int argc, char *argv[]) {
 	//array contendo o numero maximo de threads definido ao início do programa
 	pthread_t trabalhadores[num_trabalhadores];
 	int thread_trabalhadora; //thread que vai executar o traçado de raios
-	long razao = WID/num_trabalhadores; //Quantidade de pixels que cada thread deve processar
+	long razao = WID/num_trabalhadores; //Cada thread irá processar 1 linha da imagem por vez
 
+	//loop de trabalhadores, do 1 até o n escolhido
+	//em cada iteracao é criado uma thread e enviado a essa thread
+	//uma sessão da imagem.
 	for(int b = 0; b < num_trabalhadores; b++) {
 		// vai ser enviado para a subrotina da thread a quantidade de pixels
 		// que vai ser processada, e a quantidade de pixels que já foi processada
 		long divisao = (b+1)*razao;
+							//pthread_create(worker associeted, null, function to be called, arg of function)
 		thread_trabalhadora = pthread_create(&trabalhadores[b], NULL, threads_trabalhadores,(void*) divisao);
 		if(thread_trabalhadora){
-			printf("Deu merda");
+			printf("Deu merda na criacao de threads");
 		}
 	}
 
@@ -104,9 +103,9 @@ void *threads_trabalhadores(void *blocksize){
     float rcp_samples;
     long i = 0; //contador do for
     long escalonador = parcial - (WID/num_trabalhadores); //representa a quantidade de pixels já foi processada, pois depende do parâmetro que foi passado do main()
-    int samples;
+    int samples = 8;
     int j, s;
-    samples = 8;
+
     rcp_samples = 1.0 / (float)samples;
     for(i = escalonador; i < parcial ; i++)
     {
