@@ -2,6 +2,8 @@
 #include "function.h"
 
 void *threads_trabalhadores(void *blocksize);
+int receive_line();
+int varredor_imagem = 0;
 
 uchar *image;
 camera c;
@@ -81,8 +83,7 @@ int main(int argc, char *argv[]) {
 
 	for(int k = 0; k < num_trabalhadores; k++) {
 		//desacopla as threads que estavam em execução
-		pthread_join(trabalhadores[k], NULL);
-	}
+		pthread_join(trabalhadores[k], NULL);	}
 
 	if(save_bmp("output_rt.bmp",&c,image) != 0) {
 		fprintf(stderr,"Cannot write image 'output.bmp'.\n");
@@ -93,6 +94,9 @@ int main(int argc, char *argv[]) {
 
 	//termina a thread pai
 	pthread_exit(NULL);
+
+
+
 	//---exit---
 	return 0;
 }
@@ -137,4 +141,21 @@ void *threads_trabalhadores(void *blocksize){
         }
 
     }
+}
+
+//a esperança é que essa funcao retorne uma linha/coordenada quando
+//uma thread pedir para que possa ser calculado o tracado de raios
+int receive_line(){
+
+	//há de haver um sinal/mutex aqui, para controlar o acesso à uma coordenada
+
+
+    do{
+   		printf("%d\n", varredor_imagem);
+   		//return varredor_imagem;
+   		varredor_imagem++; //varredor imagem é uma variavel global
+    }while(varredor_imagem <= WID);
+
+    return 0;
+	
 }
