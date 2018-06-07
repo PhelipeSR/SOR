@@ -19,3 +19,4 @@ Bag of Tasks Paradigm (Section 3.6)
 
 Excelente explicação de MUTEX. (talvez seja preciso para implementar thread. ou talvez sinais)
   http://nrecursions.blogspot.com/2014/08/mutex-tutorial-and-example.html
+  https://www.thegeekstuff.com/2012/05/c-mutex-examples/?refcom
