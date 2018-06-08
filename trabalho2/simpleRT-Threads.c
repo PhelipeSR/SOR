@@ -3,7 +3,7 @@
 
 void *threads_trabalhadores(void *blocksize);
 int receive_line();
-int varredor_imagem = 1;
+int varredor_imagem = 0;
 
 uchar *image;
 camera c;
@@ -97,10 +97,9 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 
+	free(image);
 
 	pthread_mutex_destroy(&lock);
-
-	free(image);
 
 	//termina a thread pai
 	pthread_exit(NULL);
@@ -119,14 +118,12 @@ void *threads_trabalhadores(void *blocksize){
     int j, s;
 
     rcp_samples = 1.0 / (float)samples;
+    int i;
 
-	int i = receive_line();//get an 'i' from function getline() and enter below for{for{}}
-	
 	do{
-		if (i == WID){ //if 'i' received is WID, shit is done. go home.
-			return 0;
-		}
-
+		
+		i = receive_line(); //get an 'i' from function receive_line() and enter below for{for{}}
+	
 	    for(j = 0 ; j < c.view.height ; j++)
 	    {
 	        float r, g, b;
@@ -153,29 +150,33 @@ void *threads_trabalhadores(void *blocksize){
 	        image[ 3* (i * c.view.height + j) + 1] = floatToIntColor(g);
 	        image[ 3* (i * c.view.height + j) + 2] = floatToIntColor(b);
 	    }
-    }while(1); 
+    }while(i < WID);
+    printf("thread's mission accomplished\n");
 }
 
 //a esperança é que essa funcao retorne uma linha/coordenada quando
 //uma thread pedir para que possa ser calculado o tracado de raios
 int receive_line(){
 
-	if(varredor_imagem > WID){
-		//acabaram as linhas pra fazer varredura. tchau.
-		return WID;//return WID value so threads knows is time to go home
-	}
-
-	//this is where the thread locks the function to have narcissistic control
-	pthread_mutex_lock(&lock);
+	pthread_mutex_lock(&lock);//this is where the thread locks the function to have narcissistic control
 	printf("func locked\n");
 
+	if(varredor_imagem > WID){//acabaram as linhas pra fazer varredura. tchau.
+
+		pthread_mutex_unlock(&lock);
+    	//printf("func unlocked because varredor_imagem > WID\n");
+    	return (WID);//return over WID value so threads knows is time to go home
+	}
+		
+
 	printf("line %d handled\n", varredor_imagem);
+	int varredor_imagem_atual = varredor_imagem;
 	varredor_imagem++; //varredor imagem é uma variavel global
 
 	//if you love it set it free
-    pthread_mutex_unlock(&lock);
     printf("func unlocked\n");
-    
-    return varredor_imagem;
+    pthread_mutex_unlock(&lock);
+        
+    return varredor_imagem_atual;
 	
 }
