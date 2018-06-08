@@ -2,12 +2,15 @@
 #include "function.h"
 
 void *threads_trabalhadores(void *blocksize);
+int receive_line();
+int varredor_imagem = 0;
 
 uchar *image;
 camera c;
 point urand[NRAN];
 int irand[NRAN];
 int num_trabalhadores;
+pthread_mutex_t lock; //stuff from mutex. dont ask me.
 
 int main(int argc, char *argv[]) {
 	/**
@@ -18,13 +21,8 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 	num_trabalhadores = strtol(argv[1], NULL, 10);
-	/**
-	* Verifica se a quantidade de processos é divisível pela largura
-	*/
-	if (WID % (num_trabalhadores) != 0) {
-		printf("O numero de processos %d nao e divisivel por %d\n", num_trabalhadores,WID);
-		return 0;
-	}
+	
+
 	int i;
 	point eye;
 	point lookat;
@@ -39,6 +37,13 @@ int main(int argc, char *argv[]) {
 
 	initCamera(&c,eye,lookat,WID,HEI);
 	setupCamera(&c);
+
+	//--start and check of mutex--
+	if (pthread_mutex_init(&lock, NULL) != 0)
+    {
+        printf("\n mutex init failed. mutex sucks\n");
+        return 1;
+    }
 
 	//---malloc the image frame---
 	image = (uchar *) malloc(c.view.width * c.view.height * 3 * sizeof(uchar));
@@ -68,15 +73,17 @@ int main(int argc, char *argv[]) {
 	//array contendo o numero maximo de threads definido ao início do programa
 	pthread_t trabalhadores[num_trabalhadores];
 	int thread_trabalhadora; //thread que vai executar o traçado de raios
-	long razao = WID/num_trabalhadores; //Quantidade de pixels que cada thread deve processar
 
+	//loop de trabalhadores, do 1 até o n escolhido
+	//em cada iteracao é criado uma thread e enviado a essa thread
+	//uma sessão da imagem.
 	for(int b = 0; b < num_trabalhadores; b++) {
 		// vai ser enviado para a subrotina da thread a quantidade de pixels
 		// que vai ser processada, e a quantidade de pixels que já foi processada
-		long divisao = (b+1)*razao;
-		thread_trabalhadora = pthread_create(&trabalhadores[b], NULL, threads_trabalhadores,(void*) divisao);
+							//pthread_create(worker associeted, null, function to be called, arg of function)
+		thread_trabalhadora = pthread_create(&trabalhadores[b], NULL, threads_trabalhadores, NULL);
 		if(thread_trabalhadora){
-			printf("Deu merda");
+			printf("Deu merda na criacao de threads");
 		}
 	}
 
@@ -92,50 +99,84 @@ int main(int argc, char *argv[]) {
 
 	free(image);
 
+	pthread_mutex_destroy(&lock);
+
 	//termina a thread pai
 	pthread_exit(NULL);
+
+
+
 	//---exit---
 	return 0;
 }
 
 void *threads_trabalhadores(void *blocksize){
 
-    long parcial = (long) blocksize;
+    long parcial = (long) blocksize;//not even using nmore
     float rcp_samples;
-    long i = 0; //contador do for
-    long escalonador = parcial - (WID/num_trabalhadores); //representa a quantidade de pixels já foi processada, pois depende do parâmetro que foi passado do main()
-    int samples;
+    int samples = 8;
     int j, s;
-    samples = 8;
+
     rcp_samples = 1.0 / (float)samples;
-    for(i = escalonador; i < parcial ; i++)
-    {
-        for(j = 0 ; j < c.view.height ; j++)
-        {
-            float r, g, b;
-            r = g = b = 0.0;
+    int i;
 
-            for(s=0; s < samples; s++) {
-                ray rr = get_primary_ray(&c,i,j,s);
-                color col = trace(c,&rr,0);
-                r += col.r;
-                g += col.g;
-                b += col.b;
-            }
+	do{
+		
+		i = receive_line(); //get an 'i' from function receive_line() and enter below for{for{}}
+	
+	    for(j = 0 ; j < c.view.height ; j++)
+	    {
+	        float r, g, b;
+	        r = g = b = 0.0;
+
+	        for(s=0; s < samples; s++) {
+	            ray rr = get_primary_ray(&c,i,j,s);
+	            color col = trace(c,&rr,0);
+	            r += col.r;
+	            g += col.g;
+	            b += col.b;
+	        }
 
 
-            r = r * rcp_samples;
-            g = g * rcp_samples;
-            b = b * rcp_samples;
+	        r = r * rcp_samples;
+	        g = g * rcp_samples;
+	        b = b * rcp_samples;
 
-            //ray rr = get_primary_ray(&c, i, j, samples); 
-            //color clr = trace(c,&rr,0);
+	        //ray rr = get_primary_ray(&c, i, j, samples); 
+	        //color clr = trace(c,&rr,0);
 
-            //red green blue color components
-            image[ 3* (i * c.view.height + j) + 0] = floatToIntColor(r);
-            image[ 3* (i * c.view.height + j) + 1] = floatToIntColor(g);
-            image[ 3* (i * c.view.height + j) + 2] = floatToIntColor(b);
-        }
+	        //red green blue color components
+	        image[ 3* (i * c.view.height + j) + 0] = floatToIntColor(r);
+	        image[ 3* (i * c.view.height + j) + 1] = floatToIntColor(g);
+	        image[ 3* (i * c.view.height + j) + 2] = floatToIntColor(b);
+	    }
+    }while(i < WID);
+    printf("thread's mission accomplished\n");
+}
 
-    }
+//a esperança é que essa funcao retorne uma linha/coordenada quando
+//uma thread pedir para que possa ser calculado o tracado de raios
+int receive_line(){
+
+	pthread_mutex_lock(&lock);//this is where the thread locks the function to have narcissistic control
+	printf("func locked\n");
+
+	if(varredor_imagem > WID){//acabaram as linhas pra fazer varredura. tchau.
+
+		pthread_mutex_unlock(&lock);
+    	//printf("func unlocked because varredor_imagem > WID\n");
+    	return (WID);//return over WID value so threads knows is time to go home
+	}
+		
+
+	printf("line %d handled\n", varredor_imagem);
+	int varredor_imagem_atual = varredor_imagem;
+	varredor_imagem++; //varredor imagem é uma variavel global
+
+	//if you love it set it free
+    printf("func unlocked\n");
+    pthread_mutex_unlock(&lock);
+        
+    return varredor_imagem_atual;
+	
 }
