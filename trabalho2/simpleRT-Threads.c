@@ -1,8 +1,13 @@
 #include <pthread.h>
 #include "function.h"
 
+// ============================
 void *threads_trabalhadores(void *blocksize);
+void process_lock();
+void process_unlock();
 int receive_line();
+// ============================
+
 int varredor_imagem = 0;
 
 uchar *image;
@@ -21,7 +26,6 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 	num_trabalhadores = strtol(argv[1], NULL, 10);
-	
 
 	int i;
 	point eye;
@@ -39,9 +43,8 @@ int main(int argc, char *argv[]) {
 	setupCamera(&c);
 
 	//--start and check of mutex--
-	if (pthread_mutex_init(&lock, NULL) != 0)
-    {
-        printf("\n mutex init failed. mutex sucks\n");
+	if (pthread_mutex_init(&lock, NULL) != 0) {
+        printf("\n Mmutex init failed. Mutex sucks\n");
         return 1;
     }
 
@@ -54,17 +57,10 @@ int main(int argc, char *argv[]) {
 
 	//---just init the image frame with some data---
 	initImage(&c,image);
-
-	//---insert random N_SPHERES into the 'data' array
-	//generateRandomSpheres();
 	generateScene();
-
-	//---insert random N_LIGHTS into the 'lights' array
 	generateRandomLightSources();
 
 	//---create a 1D array with primary rays coordinates
-	//rays = generatePrimaryRays(&c);
-
 	for(i=0; i<NRAN; i++) urand[i].x = (double)rand() / RAND_MAX - 0.5;
 	for(i=0; i<NRAN; i++) urand[i].y = (double)rand() / RAND_MAX - 0.5;
 	for(i=0; i<NRAN; i++) irand[i] = (int)(NRAN * ((double)rand() / RAND_MAX));
@@ -72,18 +68,13 @@ int main(int argc, char *argv[]) {
 
 	//array contendo o numero maximo de threads definido ao início do programa
 	pthread_t trabalhadores[num_trabalhadores];
-	int thread_trabalhadora; //thread que vai executar o traçado de raios
+	// Thread que vai executar o traçado de raios
+	int thread_trabalhadora;
 
-	//loop de trabalhadores, do 1 até o n escolhido
-	//em cada iteracao é criado uma thread e enviado a essa thread
-	//uma sessão da imagem.
 	for(int b = 0; b < num_trabalhadores; b++) {
-		// vai ser enviado para a subrotina da thread a quantidade de pixels
-		// que vai ser processada, e a quantidade de pixels que já foi processada
-							//pthread_create(worker associeted, null, function to be called, arg of function)
 		thread_trabalhadora = pthread_create(&trabalhadores[b], NULL, threads_trabalhadores, NULL);
 		if(thread_trabalhadora){
-			printf("Deu merda na criacao de threads");
+			printf("Error criacao de threads");
 		}
 	}
 
@@ -91,22 +82,14 @@ int main(int argc, char *argv[]) {
 		//desacopla as threads que estavam em execução
 		pthread_join(trabalhadores[k], NULL);
 	}
-
 	if(save_bmp("output_rt.bmp",&c,image) != 0) {
 		fprintf(stderr,"Cannot write image 'output.bmp'.\n");
 		return 0;
 	}
-
 	free(image);
-
 	pthread_mutex_destroy(&lock);
-
 	//termina a thread pai
 	pthread_exit(NULL);
-
-
-
-	//---exit---
 	return 0;
 }
 
@@ -121,9 +104,10 @@ void *threads_trabalhadores(void *blocksize){
     int i;
 
 	do{
-		
-		i = receive_line(); //get an 'i' from function receive_line() and enter below for{for{}}
-	
+
+		process_lock();
+		i = receive_line();
+		process_unlock();
 	    for(j = 0 ; j < c.view.height ; j++)
 	    {
 	        float r, g, b;
@@ -154,29 +138,28 @@ void *threads_trabalhadores(void *blocksize){
     printf("thread's mission accomplished\n");
 }
 
-//a esperança é que essa funcao retorne uma linha/coordenada quando
-//uma thread pedir para que possa ser calculado o tracado de raios
 int receive_line(){
 
-	pthread_mutex_lock(&lock);//this is where the thread locks the function to have narcissistic control
-	printf("func locked\n");
-
-	if(varredor_imagem > WID){//acabaram as linhas pra fazer varredura. tchau.
-
-		pthread_mutex_unlock(&lock);
-    	//printf("func unlocked because varredor_imagem > WID\n");
-    	return (WID);//return over WID value so threads knows is time to go home
+	//acabaram as linhas pra fazer varredura. tchau.
+	if(varredor_imagem > WID){
+		return (WID);
 	}
-		
-
-	printf("line %d handled\n", varredor_imagem);
 	int varredor_imagem_atual = varredor_imagem;
-	varredor_imagem++; //varredor imagem é uma variavel global
+	varredor_imagem++;
 
-	//if you love it set it free
-    printf("func unlocked\n");
-    pthread_mutex_unlock(&lock);
-        
     return varredor_imagem_atual;
-	
+}
+
+void process_lock(void) {
+	int ret;
+	ret = pthread_mutex_lock(&lock);
+	if (ret != 0)
+		exit(EXIT_FAILURE);
+}
+
+void process_unlock(void) {
+	int ret;
+    ret = pthread_mutex_unlock(&lock);
+	if (ret != 0)
+		exit(EXIT_FAILURE);
 }
