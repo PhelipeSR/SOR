@@ -76,7 +76,7 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 	//---malloc the varredor_imagem--
-	k1 = ftok("/tmp",'	L');
+	k1 = ftok("/tmp",'L');
 	shmid1 = shmget(k1, sizeof(int), 0644|IPC_CREAT);
 	varredor_imagem = shmat(shmid1, (void*)0, 0);
 

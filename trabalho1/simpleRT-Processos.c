@@ -66,7 +66,7 @@ int main(int argc, char *argv[]) {
 
 	//---malloc the image frame---
 
-	k = ftok("/home/larissapires/SOR/Processos/simpleRT.c",'R');
+	k = ftok("/tmp",'R');
 	shmid = shmget(k, c.view.width * c.view.height * 3 * sizeof(uchar), 0644|IPC_CREAT);
 	//pai associa-se a regiao compartilhada
 	image = shmat(shmid, (void*)0, 0);
@@ -164,7 +164,7 @@ int main(int argc, char *argv[]) {
 
 	//---freeing data---
 	//free(rays);
-	free(image);
+	// free(image);
 
 	//---exit---
 	return 0;
